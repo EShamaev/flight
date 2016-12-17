@@ -7,8 +7,13 @@ This code powers:
 
 * [Self-flying drone dips, darts and dives through trees at 30 mph](http://www.csail.mit.edu/drone_flies_through_forest_at_30_mph)
   * [video](https://www.youtube.com/watch?v=_qah8oIzCwk)
+  * [thesis (pdf)](http://groups.csail.mit.edu/robotics-center/public_papers/Barry16.pdf)
   
   [![Drone Autonomously Avoiding Obstacles at 30 MPH](http://img.youtube.com/vi/_qah8oIzCwk/0.jpg)](https://www.youtube.com/watch?v=_qah8oIzCwk)
+
+  * [techincal video](https://www.youtube.com/watch?v=iksfHQkkq88)
+  
+  [![Pushbroom Stereo for High-Speed Obstacle Avoidance (technical video)](http://img.youtube.com/vi/iksfHQkkq88/0.jpg)](https://www.youtube.com/watch?v=iksfHQkkq88)
 
 * *FPGA vs. pushbroom stereo vision for MAVs*:
   * [paper (pdf)](http://groups.csail.mit.edu/robotics-center/public_papers/Barry15a.pdf)
@@ -25,7 +30,15 @@ This code powers:
   * [abstract (pdf)](http://groups.csail.mit.edu/robotics-center/public_papers/Barry14.pdf)
   * [thesis (pdf)](http://groups.csail.mit.edu/robotics-center/public_papers/Barry12a.pdf)
 
+Pushbroom stereo files are here:
+  * [Main class](https://github.com/andybarry/flight/blob/master/sensors/stereo/pushbroom-stereo.hpp) [[cpp](https://github.com/andybarry/flight/blob/master/sensors/stereo/pushbroom-stereo.cpp)]
+  * [Camera capture, recording management, debugging UI, etc.](https://github.com/andybarry/flight/blob/master/sensors/stereo/pushbroom-stereo-main.hpp) [[cpp](https://github.com/andybarry/flight/blob/master/sensors/stereo/pushbroom-stereo-main.cpp)]
+  
+Logs and videos:
+  * http://abarry.org/files/logs
+
 See also:
+  * [Full parts list (PDF)](https://github.com/andybarry/flight-cad/blob/master/TBSC/PartsList.pdf)
   * [Drake toolbox](http://drake.mit.edu) for planning, control, and analysis
   * [Simulation code](https://github.com/andybarry/simflight)
   * [CAD](https://github.com/andybarry/flight-cad/tree/master/TBSC)

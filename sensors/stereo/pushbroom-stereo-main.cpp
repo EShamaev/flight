@@ -1,14 +1,15 @@
 /**
- * Program that grabs stereo pairs from Point Grey
+ * Program that runs pushbroom stereo.
+ * This grabs stereo pairs from Point Grey
  * Firefly MV USB cameras, perfroms the single-disparity
  * stereo algorithm on them, and publishes the results
  * to LCM.
  *
- * Written by Andrew Barry <abarry@csail.mit.edu>, 2013
+ * Copyright 2013-2015, Andrew Barry <abarry@csail.mit.edu>
  *
  */
 
-#include "opencv-stereo.hpp"
+#include "pushbroom-stereo-main.hpp"
 
 bool show_display; // set to true to show opencv images on screen
 int show_display_wait = 1; // milli seconds to wait between frames when showing display
@@ -37,13 +38,16 @@ int lineLeftImgPositionY = -1;
 // lcm subscription to the control channel
 lcmt_stereo_control_subscription_t *stereo_control_sub;
 
-BarryMooreState state; // HACK
+PushbroomStereoState state; // HACK
 
 // subscriptions to data
 lcmt_stereo_subscription_t *stereo_replay_sub;
 lcmt_cpu_info_subscription_t *cpu_info_sub1;
 lcmt_cpu_info_subscription_t *cpu_info_sub2;
 lcmt_cpu_info_subscription_t *cpu_info_sub3;
+lcmt_log_size_subscription_t *log_size_sub1;
+lcmt_log_size_subscription_t *log_size_sub2;
+lcmt_log_size_subscription_t *log_size_sub3;
 mav_pose_t_subscription_t *mav_pose_t_sub;
 lcmt_baro_airspeed_subscription_t *baro_airspeed_sub;
 lcmt_battery_status_subscription_t *battery_status_sub;
@@ -347,6 +351,12 @@ int main(int argc, char *argv[])
             cpu_info_sub3 = lcmt_cpu_info_subscribe(lcm, stereoConfig.cpu_info_channel3.c_str(), &cpu_info_handler, &recording_manager);
         }
 
+        if (stereoConfig.log_size_channel1.length() > 0) {
+            log_size_sub1 = lcmt_log_size_subscribe(lcm, stereoConfig.log_size_channel1.c_str(), &log_size_handler, &hud);
+            log_size_sub2 = lcmt_log_size_subscribe(lcm, stereoConfig.log_size_channel2.c_str(), &log_size_handler, &hud);
+            log_size_sub3 = lcmt_log_size_subscribe(lcm, stereoConfig.log_size_channel3.c_str(), &log_size_handler, &hud);
+        }
+
     } // end show_display || publish_all_images
 
     // load calibration
@@ -371,7 +381,7 @@ int main(int argc, char *argv[])
     Mat imgDisp2;
 
     // initilize default parameters
-    //BarryMooreState state; // HACK
+    //PushbroomStereoState state; // HACK
 
     state.disparity = stereoConfig.disparity;
     state.zero_dist_disparity = stereoConfig.infiniteDisparity;
@@ -440,7 +450,7 @@ int main(int argc, char *argv[])
     } // recording_manager.UsingLiveCameras()
 
     // spool up worker threads
-    BarryMoore barry_moore_stereo;
+    PushbroomStereo pushbroom_stereo;
 
     // start the framerate clock
     struct timeval start, now;
@@ -482,7 +492,7 @@ int main(int argc, char *argv[])
             gettimeofday( &now, NULL );
             double before = now.tv_usec + now.tv_sec * 1000 * 1000;
 
-            barry_moore_stereo.ProcessImages(matL, matR, &pointVector3d, &pointColors, &pointVector2d, state);
+            pushbroom_stereo.ProcessImages(matL, matR, &pointVector3d, &pointColors, &pointVector2d, state);
 
             gettimeofday( &now, NULL );
             double after = now.tv_usec + now.tv_sec * 1000 * 1000;
@@ -589,7 +599,7 @@ int main(int argc, char *argv[])
 
             // draw pixel blocks
             if (lineLeftImgPosition >= 0 && lineLeftImgPositionY > 1) {
-                DisplayPixelBlocks(remapL, remapR, lineLeftImgPosition - state.blockSize/2, lineLeftImgPositionY - state.blockSize/2, state, &barry_moore_stereo);
+                DisplayPixelBlocks(remapL, remapR, lineLeftImgPosition - state.blockSize/2, lineLeftImgPositionY - state.blockSize/2, state, &pushbroom_stereo);
             }
 
             // draw a line for the user to show disparity
@@ -621,7 +631,7 @@ int main(int argc, char *argv[])
             if (display_hud) {
                 Mat with_hud;
 
-                recording_manager.SetHudNumbers(hud);
+                recording_manager.SetHudNumbers(&hud);
 
                 hud.DrawHud(matDisp, with_hud);
 
@@ -980,7 +990,7 @@ void DrawLines(Mat leftImg, Mat rightImg, Mat stereoImg, int lineX, int lineY, i
  * Writes a disparity map in the style of a normal stereo vision system
  *
  * @param pointVector2d output from stereo algorithm
- * @param state BarryMooreState used to process stereo
+ * @param state PushbroomStereoState used to process stereo
  * @param pixel_value value to fill in this round of pixels, from 0 to 255
  *  @default 128
  * @param existing_map provide this if you want to write on top of an existing
@@ -990,7 +1000,7 @@ void DrawLines(Mat leftImg, Mat rightImg, Mat stereoImg, int lineX, int lineY, i
  * @retval a Mat that contains the single disparity map.  It is CV_8UC1 and
  *      sized 376x240.
  */
-Mat WriteDisparityMap(cv::vector<Point3i> *pointVector2d, BarryMooreState state, int pixel_value, Mat existing_map) {
+Mat WriteDisparityMap(cv::vector<Point3i> *pointVector2d, PushbroomStereoState state, int pixel_value, Mat existing_map) {
 
     // init the mat as all black
 
@@ -1022,11 +1032,11 @@ Mat WriteDisparityMap(cv::vector<Point3i> *pointVector2d, BarryMooreState state,
  * @param right_image the right image
  * @param left left coordinate of the box
  * @param top top coordinate of the box
- * @param state BarryMooreState containing stereo information
- * @param barry_moore_stereo stereo object so we can run GetSAD
+ * @param state PushbroomStereoState containing stereo information
+ * @param pushbroom_stereo stereo object so we can run GetSAD
  *
  */
-void DisplayPixelBlocks(Mat left_image, Mat right_image, int left, int top, BarryMooreState state, BarryMoore *barry_moore_stereo) {
+void DisplayPixelBlocks(Mat left_image, Mat right_image, int left, int top, PushbroomStereoState state, PushbroomStereo *pushbroom_stereo) {
     if (left + state.blockSize > left_image.cols || top+state.blockSize > left_image.rows
         || left + state.blockSize > right_image.cols || top+state.blockSize > right_image.rows
         || left + state.disparity < 0) { // remember, disparity can be negative
@@ -1048,7 +1058,7 @@ void DisplayPixelBlocks(Mat left_image, Mat right_image, int left, int top, Barr
 
     // compute stats about block
     int left_interest, right_interest, raw_sad;
-    int sad = barry_moore_stereo->GetSAD(left_image, right_image, laplacian_left, laplacian_right, left, top,
+    int sad = pushbroom_stereo->GetSAD(left_image, right_image, laplacian_left, laplacian_right, left, top,
         state, &left_interest, &right_interest, &raw_sad);
 
     float diff_score = 100*(float)abs(left_interest - right_interest)/(float)(left_interest+right_interest);
@@ -1125,12 +1135,25 @@ void mav_gps_data_t_handler(const lcm_recv_buf_t *rbuf, const char* channel, con
     hud->SetGpsHeading(msg->heading);
 }
 
+void log_size_handler(const lcm_recv_buf_t *rbuf, const char* channel, const lcmt_log_size *msg, void *user) {
+    Hud *hud = (Hud*)user;
+
+    // plane number is the last character of the channel name
+    char last_char = channel[strlen(channel)-1];
+    int plane_number = last_char - '0'; // this converts a single character to an integer
+                                        // and is standards conforming C
+
+    hud->SetPlaneNumber(plane_number);
+    hud->SetLogNumber(msg->log_number);
+}
+
 void mav_pose_t_handler(const lcm_recv_buf_t *rbuf, const char* channel, const mav_pose_t *msg, void *user) {
     Hud *hud = (Hud*)user;
 
     hud->SetAltitude(msg->pos[2]);
     hud->SetOrientation(msg->orientation[0], msg->orientation[1], msg->orientation[2], msg->orientation[3]);
     hud->SetAcceleration(msg->accel[0], msg->accel[1], msg->accel[2]);
+    hud->SetAirspeed(msg->vel[0]);
 
     hud->SetTimestamp(msg->utime);
 }
